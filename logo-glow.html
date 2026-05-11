@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>无界未来 — 光效Logo动画</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #050816;
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh; overflow: hidden;
+  font-family: 'Montserrat', sans-serif;
+}
+.logo-wrap {
+  position: relative; display: inline-block;
+}
+canvas { display: block; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="logo-wrap">
+  <canvas id="logoCanvas"></canvas>
+</div>
+
+<script>
+// ============================================
+// 无界未来 — 图片Logo + 光效流转动画
+// 图片: 1774×887 | 光效粒子沿椭圆轨道流转
+// ============================================
+
+const canvas = document.getElementById('logoCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- 配置 ---
+const LOGO_SRC = 'a78e6178442cfafb4eb8ae0d9f82b2f3.png';
+const W = 900, H = 500;           // 显示尺寸（按比例缩放）
+const PARTICLE_COUNT = 120;         // 光效粒子数
+const GLOW_LAYERS = 3;             // 发光层数
+const TRAIL_LENGTH = 18;           // 尾迹长度（帧）
+
+canvas.width = W;
+canvas.height = H;
+
+// --- 加载Logo图片 ---
+const logoImg = new Image();
+logoImg.src = LOGO_SRC;
+
+// --- 椭圆轨道参数（围绕Logo四周）---
+const orbitCX = W / 2;
+const orbitCY = H / 2;
+const orbitRX = W * 0.48;   // 椭圆X半径
+const orbitRY = H * 0.48;   // 椭圆Y半径
+
+// --- 粒子类 ---
+class GlowParticle {
+  constructor(layer) {
+    this.layer = layer || 0;
+    // 角度 [0, 2π)
+    this.angle = Math.random() * Math.PI * 2;
+    // 角速度（不同层不同方向）
+    this.speed = (0.008 + Math.random() * 0.006) * (this.layer % 2 === 0 ? 1 : -1);
+    // 粒子尺寸 2~5 px
+    this.size = 2 + Math.random() * 3;
+    // 透明度
+    this.alpha = 0.5 + Math.random() * 0.5;
+    // 颜色层（模拟 #69A7FF / #9FD0FF / #FFFFFF）
+    this.colors = [
+      'rgba(105,167,255,',  // 宇宙蓝
+      'rgba(159,208,255,',  // 星云蓝
+      'rgba(255,255,255,'    // 能量白
+    ];
+    // 尾迹历史
+    this.trail = [];
+  }
+
+  update() {
+    this.angle += this.speed;
+    // 记录尾迹
+    const pos = this.getPos();
+    this.trail.push({ x: pos.x, y: pos.y });
+    if (this.trail.length > TRAIL_LENGTH) this.trail.shift();
+  }
+
+  getPos() {
+    return {
+      x: orbitCX + Math.cos(this.angle) * (orbitRX + this.layer * 12),
+      y: orbitCY + Math.sin(this.angle) * (orbitRY + this.layer * 8)
+    };
+  }
+
+  draw() {
+    const pos = this.getPos();
+    const col = this.colors[this.layer % this.colors.length];
+
+    // 绘制尾迹
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = this.trail[i];
+      const fade = i / this.trail.length;
+      const r = this.size * fade;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = col + (this.alpha * fade * 0.6) + ')';
+      ctx.fill();
+    }
+
+    // 绘制粒子本体（带发光）
+    ctx.save();
+    ctx.shadowBlur = 12 + this.layer * 4;
+    ctx.shadowColor = col + '0.8)';
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, this.size, 0, Math.PI * 2);
+    ctx.fillStyle = col + this.alpha + ')';
+    ctx.fill();
+    ctx.restore();
+
+    // 核心亮点（Add混合模拟）
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, this.size * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,' + (this.alpha * 0.7) + ')';
+    ctx.fill();
+  }
+}
+
+// --- 初始化粒子（多层模拟120000+效果）---
+const particles = [];
+for (let l = 0; l < GLOW_LAYERS; l++) {
+  for (let i = 0; i < PARTICLE_COUNT / GLOW_LAYERS; i++) {
+    particles.push(new GlowParticle(l));
+  }
+}
+
+// --- 绘制Logo图片 ---
+function drawLogo() {
+  if (!logoImg.complete || !logoImg.naturalWidth) return false;
+  // 图片绘制区域（留边距避免被粒子遮挡）
+  const padX = W * 0.12;
+  const padY = H * 0.12;
+  ctx.drawImage(logoImg, padX, padY, W - padX * 2, H - padY * 2);
+  return true;
+}
+
+// --- 绘制外层光晕 ---
+function drawOuterGlow(time) {
+  const t = (time % 8000) / 8000; // 8秒呼吸周期
+  const breath = Math.sin(t * Math.PI * 2) * 0.5 + 0.5;
+
+  // 三层光晕
+  const glows = [
+    { r: W * 0.45, a: 0.06 * breath, c: '5,35,102' },
+    { r: W * 0.38, a: 0.10 * breath, c: '30,80,180' },
+    { r: W * 0.32, a: 0.15 * breath, c: '105,167,255' }
+  ];
+
+  glows.forEach(g => {
+    const grad = ctx.createRadialGradient(orbitCX, orbitCY, 0, orbitCX, orbitCY, g.r);
+    grad.addColorStop(0, `rgba(${g.c},${g.a})`);
+    grad.addColorStop(1, `rgba(${g.c},0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  });
+}
+
+// --- 绘制星尘背景 ---
+const stars = [];
+for (let i = 0; i < 60; i++) {
+  stars.push({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    r: 0.5 + Math.random() * 1.5,
+    twinkle: Math.random() * Math.PI * 2
+  });
+}
+
+function drawStars(time) {
+  stars.forEach(s => {
+    const alpha = 0.3 + 0.7 * Math.sin((time / 1000) * 2 + s.twinkle);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(200,220,255,${alpha * 0.5})`;
+    ctx.fill();
+  });
+}
+
+// --- 主动画循环 ---
+function animate(time) {
+  // 半透明清屏（产生拖影效果）
+  ctx.fillStyle = 'rgba(5,8,22,0.15)';
+  ctx.fillRect(0, 0, W, H);
+
+  drawStars(time);
+  drawOuterGlow(time);
+
+  // 更新&绘制粒子（Additive混合）
+  ctx.globalCompositeOperation = 'lighter';
+  particles.forEach(p => { p.update(); p.draw(); });
+  ctx.globalCompositeOperation = 'source-over';
+
+  // 绘制Logo（在粒子之上）
+  drawLogo();
+
+  // 边缘暗角
+  const vignette = ctx.createRadialGradient(orbitCX, orbitCY, W * 0.25, orbitCX, orbitCY, W * 0.7);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.18)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+
+  requestAnimationFrame(animate);
+}
+
+// 启动
+logoImg.onload = () => requestAnimationFrame(animate);
+if (logoImg.complete) requestAnimationFrame(animate);
+</script>
+</body>
+</html>
